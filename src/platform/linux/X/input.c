@@ -428,25 +428,34 @@ uint8_t x_input_lookup_code(const char *name, int *shifted)
 {
 	uint8_t code = 0;
 	size_t i;
+	KeySym target_sym;
 
 	for (i = 0; i < sizeof normalization_map / sizeof normalization_map[0]; i++)
 		if (!strcmp(normalization_map[i].name, name))
 			name = normalization_map[i].xname;
 
-	KeySym sym = XStringToKeysym(name);
-
-	if (!sym)
+	target_sym = XStringToKeysym(name);
+	if (!target_sym)
 		return 0;
-	
-	code = XKeysymToKeycode(dpy, sym);
 
-	if (XKeycodeToKeysym(dpy, code, 0) != sym)
-		*shifted = 1;
-	else
-		*shifted = 0;
+	/*
+	 * Iterate through all possible keycodes to find which one produces
+	 * the target keysym in the current keyboard layout
+	 */
+	for (code = 8; code < 256; code++) {
+		KeySym sym0 = XKeycodeToKeysym(dpy, code, 0); /* unshifted */
+		KeySym sym1 = XKeycodeToKeysym(dpy, code, 1); /* shifted */
 
+		if (sym0 == target_sym) {
+			*shifted = 0;
+			return code;
+		} else if (sym1 == target_sym) {
+			*shifted = 1;
+			return code;
+		}
+	}
 
-	return code;
+	return 0;
 }
 
 const char *x_input_lookup_name(uint8_t code, int shifted)
